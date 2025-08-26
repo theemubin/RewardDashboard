@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { createPortal } from "react-dom";
 import { db } from '../firebase';
-import { collection, query, getDocs, doc, getDoc, where } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, getDoc, where } from 'firebase/firestore';
 import styles from './FeaturedWinnersCarousel.module.css';
 import { faLinkedin, faGithub } from "@fortawesome/free-brands-svg-icons";
 import { faGlobe } from '@fortawesome/free-solid-svg-icons';
@@ -17,23 +17,14 @@ const FeaturedWinnersCarousel: React.FC = () => {
   useEffect(() => {
     async function fetchWinners() {
       try {
-        // First, get all approved submissions
-        const approvedQuery = query(
+        const q = query(
           collection(db, 'winnerSubmissions'),
-          where('status','==','approved')
+          where('status','==','approved'),
+          orderBy('createdAt', 'desc'),
+          limit(12)
         );
-        const approvedSnap = await getDocs(approvedQuery);
-        
-        // Then sort by createdAt manually and limit to 12
-        const approvedDocs = approvedSnap.docs
-          .sort((a, b) => {
-            const aTime = a.data().createdAt?.toMillis() || 0;
-            const bTime = b.data().createdAt?.toMillis() || 0;
-            return bTime - aTime; // descending order
-          })
-          .slice(0, 12);
-
-        const docs = await Promise.all(approvedDocs.map(async docSnap => {
+        const snap = await getDocs(q);
+        const docs = await Promise.all(snap.docs.map(async docSnap => {
           const data = docSnap.data();
           let profile: UserProfile = {} as UserProfile;
           if (data.uid) {
@@ -123,8 +114,8 @@ const FeaturedWinnersCarousel: React.FC = () => {
   return (
     <section className="py-16 bg-[#111827] text-white overflow-hidden">
       <div className="max-w-2xl mx-auto text-center mb-10">
-        <h2 className="text-3xl md:text-4xl font-bold mb-2">Latest Featured Winners</h2>
-        <p className="text-lg opacity-80">Celebrating our most recent achievements in academics, culture, and overall excellence.</p>
+        <h2 className="text-3xl md:text-4xl font-bold mb-2">Last Month's Winners</h2>
+        <p className="text-lg opacity-80">Celebrating excellence in academics, culture, and overall achievement.</p>
       </div>
       <div className="relative w-full">
         <div className={styles.winnersCarouselContainer}>
@@ -172,42 +163,21 @@ const FeaturedWinnersCarousel: React.FC = () => {
                   <ul className="flex justify-center items-center mt-2">
                     {winner.linkedin && (
                       <li>
-                        <a 
-                          href={winner.linkedin} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="w-8 h-8 text-lg text-blue-400 opacity-90 mx-1 inline-flex justify-center items-center hover:text-blue-600" 
-                          title="LinkedIn"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <a href={winner.linkedin} target="_blank" rel="noopener" className="w-8 h-8 text-lg text-blue-400 opacity-90 mx-1 inline-flex justify-center items-center hover:text-blue-600" title="LinkedIn">
                           <FontAwesomeIcon icon={faLinkedin} />
                         </a>
                       </li>
                     )}
                     {winner.github && (
                       <li>
-                        <a 
-                          href={winner.github} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="w-8 h-8 text-lg text-gray-300 opacity-90 mx-1 inline-flex justify-center items-center hover:text-gray-100" 
-                          title="GitHub"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <a href={winner.github} target="_blank" rel="noopener" className="w-8 h-8 text-lg text-gray-300 opacity-90 mx-1 inline-flex justify-center items-center hover:text-gray-100" title="GitHub">
                           <FontAwesomeIcon icon={faGithub} />
                         </a>
                       </li>
                     )}
                     {winner.portfolio && (
                       <li>
-                        <a 
-                          href={winner.portfolio} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="w-8 h-8 text-lg text-green-300 opacity-90 mx-1 inline-flex justify-center items-center hover:text-green-500" 
-                          title="Portfolio"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <a href={winner.portfolio} target="_blank" rel="noopener" className="w-8 h-8 text-lg text-green-300 opacity-90 mx-1 inline-flex justify-center items-center hover:text-green-500" title="Portfolio">
                           <FontAwesomeIcon icon={faGlobe} />
                         </a>
                       </li>
@@ -326,59 +296,17 @@ const FeaturedWinnersCarousel: React.FC = () => {
                 <p style={{ fontWeight: 400, fontSize: 'min(1.1rem,3vw)', color: '#555', marginBottom: 2, marginTop: 0, lineHeight: 1.2 }}>
                   {winner.campus}
                 </p>
-                {/* Always show social icons bottom right with proper links */}
-                <ul style={{ position: 'absolute', right: 'min(1.2rem,3vw)', bottom: 'min(1.2rem,3vw)', display: 'flex', gap: 10, opacity: 0.7 }}>
-                  {winner.linkedin ? (
-                    <li>
-                      <a 
-                        href={winner.linkedin} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        title="LinkedIn"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <FontAwesomeIcon icon={faLinkedin} style={{ color: '#3b82f6', fontSize: 'min(22px,6vw)', cursor: 'pointer' }} />
-                      </a>
-                    </li>
-                  ) : (
-                    <li>
-                      <FontAwesomeIcon icon={faLinkedin} style={{ color: '#bbb', fontSize: 'min(22px,6vw)' }} />
-                    </li>
-                  )}
-                  {winner.github ? (
-                    <li>
-                      <a 
-                        href={winner.github} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        title="GitHub"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <FontAwesomeIcon icon={faGithub} style={{ color: '#18181c', fontSize: 'min(22px,6vw)', cursor: 'pointer' }} />
-                      </a>
-                    </li>
-                  ) : (
-                    <li>
-                      <FontAwesomeIcon icon={faGithub} style={{ color: '#bbb', fontSize: 'min(22px,6vw)' }} />
-                    </li>
-                  )}
-                  {winner.portfolio ? (
-                    <li>
-                      <a 
-                        href={winner.portfolio} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        title="Portfolio"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <FontAwesomeIcon icon={faGlobe} style={{ color: '#34d399', fontSize: 'min(22px,6vw)', cursor: 'pointer' }} />
-                      </a>
-                    </li>
-                  ) : (
-                    <li>
-                      <FontAwesomeIcon icon={faGlobe} style={{ color: '#bbb', fontSize: 'min(22px,6vw)' }} />
-                    </li>
-                  )}
+                {/* Always show subtle social icons bottom right, even if links missing */}
+                <ul style={{ position: 'absolute', right: 'min(1.2rem,3vw)', bottom: 'min(1.2rem,3vw)', display: 'flex', gap: 10, opacity: 0.35 }}>
+                  <li>
+                    <FontAwesomeIcon icon={faLinkedin} style={{ color: winner.linkedin ? '#3b82f6' : '#bbb', fontSize: 'min(22px,6vw)' }} />
+                  </li>
+                  <li>
+                    <FontAwesomeIcon icon={faGithub} style={{ color: winner.github ? '#18181c' : '#bbb', fontSize: 'min(22px,6vw)' }} />
+                  </li>
+                  <li>
+                    <FontAwesomeIcon icon={faGlobe} style={{ color: winner.portfolio ? '#34d399' : '#bbb', fontSize: 'min(22px,6vw)' }} />
+                  </li>
                 </ul>
               </div>
             </div>

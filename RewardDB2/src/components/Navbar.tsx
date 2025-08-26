@@ -6,9 +6,25 @@ import { useEffect, useState } from 'react';
 import './Navbar.css';
 
 export const Navbar = () => {
+  // Debug: log user object to console
   const auth = getAuth();
   const [user] = useAuthState(auth);
-  
+  // Debug: log user object to console
+  useEffect(() => {
+    console.log('[Navbar] user:', user);
+  }, [user]);
+  // Debug: log user object to console
+  useEffect(() => {
+    console.log('[Navbar] user:', user);
+  }, [user]);
+  // Debug: log user object to console
+  useEffect(() => {
+    console.log('[Navbar] user:', user);
+  }, [user]);
+  // Debug: log user object to console
+  useEffect(() => {
+    console.log('[Navbar] user:', user);
+  }, [user]);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 900);
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 900);

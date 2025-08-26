@@ -22,21 +22,34 @@ const RewardImage = ({ imageUrl, title }: { imageUrl?: string, title: string }) 
 };
 
 import './RewardsSection.css';
-import ModernRewardCard from './ModernRewardCard';
 import { useCampus } from '../contexts/CampusContext';
 import { campusList } from './campusList';
 import { collection, onSnapshot, orderBy, query, where, getDocs, addDoc, Timestamp, doc, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useUserProfile } from '../hooks/useUserProfile';
 import toast from 'react-hot-toast';
-import type { RewardRecord } from '../types/rewards';
+
+interface RewardRecord {
+  id: string;
+  title: string;
+  description: string;
+  level: number;
+  category: string;
+  campus: string;
+  pointsCost: number;
+  stock?: number;
+  imageUrl?: string;
+  externalLink?: string;
+  active: boolean;
+  likes?: number;
+}
 
 
 export const RewardsSection = ({ id }: { id?: string }) => {
   const { campusLevel } = useCampus();
   const [levelFilter, setLevelFilter] = useState<'all'|number>('all');
   const [categoryFilter, setCategoryFilter] = useState<'all'|string>('all');
-  const [campusFilter, setCampusFilter] = useState<string[] | 'all'>('all');
+  const [campusFilter, setCampusFilter] = useState('all');
   const [showLocked, setShowLocked] = useState(false);
   const [rewards, setRewards] = useState<RewardRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,16 +113,12 @@ export const RewardsSection = ({ id }: { id?: string }) => {
   };
 
   const filtered = useMemo(() => {
-    return rewards.filter(r => {
-      const levelOk = (levelFilter === 'all' || r.level === levelFilter);
-      const categoryOk = (categoryFilter === 'all' || r.category === categoryFilter);
-      let campusOk = true;
-      if(campusFilter === 'all') campusOk = true;
-      else if(Array.isArray(campusFilter)) campusOk = campusFilter.includes(r.campus) || r.campus === 'All Campus';
-      else campusOk = r.campus === campusFilter || r.campus === 'All Campus';
-      const lockOk = showLocked ? true : r.level <= campusLevel;
-      return levelOk && categoryOk && campusOk && lockOk;
-    });
+    return rewards.filter(r =>
+      (levelFilter==='all'|| r.level === levelFilter)
+      && (categoryFilter==='all'|| r.category === categoryFilter)
+      && (campusFilter==='all' || r.campus === campusFilter || r.campus === 'All Campus')
+      && (showLocked ? true : r.level <= campusLevel)
+    );
   }, [rewards, levelFilter, categoryFilter, campusFilter, showLocked, campusLevel]);
 
   const topRewards = useMemo(()=> {
@@ -119,10 +128,6 @@ export const RewardsSection = ({ id }: { id?: string }) => {
       .slice(0,5);
   },[rewards]);
   const carouselRef = useRef<HTMLDivElement|null>(null);
-  const campusRef = useRef<HTMLDivElement|null>(null);
-  const isDragging = useRef(false);
-  const dragStartX = useRef(0);
-  const dragStartScroll = useRef(0);
   const scrollCarousel = (dir:number)=>{
     if(!carouselRef.current) return;
     const width = carouselRef.current.clientWidth;
@@ -153,29 +158,6 @@ export const RewardsSection = ({ id }: { id?: string }) => {
       el.removeEventListener('mouseleave', onLeave);
     };
   },[topRewards.length]);
-
-  // Pointer drag-to-scroll for large chip lists (campus)
-  const onCampusPointerDown = (e: any) => {
-    const el = campusRef.current;
-    if(!el) return;
-    isDragging.current = true;
-    dragStartX.current = e.clientX;
-    dragStartScroll.current = el.scrollLeft;
-    try { e.target.setPointerCapture?.(e.pointerId); } catch(_){}
-    el.classList.add('dragging');
-  };
-  const onCampusPointerMove = (e: any) => {
-    if(!isDragging.current) return;
-    const el = campusRef.current; if(!el) return;
-    const dx = e.clientX - dragStartX.current;
-    el.scrollLeft = Math.max(0, dragStartScroll.current - dx);
-  };
-  const onCampusPointerUp = (e: any) => {
-    isDragging.current = false;
-    const el = campusRef.current; if(!el) return; el.classList.remove('dragging');
-    try { e.target.releasePointerCapture?.(e.pointerId); } catch(_){}
-  };
-  const onCampusPointerLeave = () => { isDragging.current = false; campusRef.current?.classList.remove('dragging'); };
 
   // Determine start of current month for claim uniqueness window
   const monthKey = useMemo(()=>{
@@ -307,99 +289,74 @@ export const RewardsSection = ({ id }: { id?: string }) => {
         </pre>
       )}
       <div className="rewards-filters">
-        <div
-          ref={campusRef}
-          className="chip-group chip-group--scroll"
-          title="Hover to expand"
-          onPointerDown={onCampusPointerDown}
-          onPointerMove={onCampusPointerMove}
-          onPointerUp={onCampusPointerUp}
-          onPointerCancel={onCampusPointerUp}
-          onPointerLeave={onCampusPointerLeave}
-        >
-          <button
-            className={`chip hover-underline ${campusFilter === 'all' ? 'selected' : ''}`}
-            onClick={() => setCampusFilter('all')}
-            aria-pressed={campusFilter === 'all'}
-          >All Campuses</button>
-          {campusList.map(c => {
-            const selected = Array.isArray(campusFilter) && campusFilter.includes(c);
-            return (
-              <button
-                key={c}
-                className={`chip hover-underline ${selected ? 'selected' : ''}`}
-                onClick={() => {
-                  if(campusFilter === 'all') setCampusFilter([c]);
-                  else if(Array.isArray(campusFilter)){
-                    if(campusFilter.includes(c)) setCampusFilter(prev => Array.isArray(prev) ? prev.filter((x: string)=> x!==c) : []);
-                    else setCampusFilter(prev => Array.isArray(prev) ? [...prev, c] : [c]);
-                  }
-                }}
-                aria-pressed={selected}
-              >{c}</button>
-            );
-          })}
-        </div>
-
-        <div className="chip-group" title="Hover to expand">
-          <button
-            className={`chip hover-underline ${levelFilter === 'all' ? 'selected' : ''}`}
-            onClick={() => setLevelFilter('all')}
-            aria-pressed={levelFilter === 'all'}
-          >All Levels</button>
-          {[1,2,3,4].map(l => (
-            <button
-              key={l}
-              className={`chip hover-underline ${levelFilter === l ? 'selected' : ''}`}
-              onClick={() => setLevelFilter(l)}
-              aria-pressed={levelFilter === l}
-            >Lvl {l}</button>
-          ))}
-        </div>
-
-        <div className="chip-group" title="Hover to expand">
-          <button
-            className={`chip hover-underline ${categoryFilter === 'all' ? 'selected' : ''}`}
-            onClick={() => setCategoryFilter('all')}
-            aria-pressed={categoryFilter === 'all'}
-          >All Categories</button>
-          {['Academic','Cultural','Overall'].map(cat => (
-            <button
-              key={cat}
-              className={`chip hover-underline ${categoryFilter === cat ? 'selected' : ''}`}
-              onClick={() => setCategoryFilter(cat)}
-              aria-pressed={categoryFilter === cat}
-            >{cat}</button>
-          ))}
-        </div>
-
+        <select className="rewards-filter" value={campusFilter} onChange={e=> setCampusFilter(e.target.value)}>
+          <option value="all">All Campuses</option>
+          {campusList.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="rewards-filter" value={levelFilter === 'all'? 'all': String(levelFilter)} onChange={e=> setLevelFilter(e.target.value==='all' ? 'all' : Number(e.target.value))}>
+          <option value="all">All Levels</option>
+          {[1,2,3,4].map(l => <option key={l} value={l}>Level {l}</option>)}
+        </select>
+        <select className="rewards-filter" value={categoryFilter} onChange={e=> setCategoryFilter(e.target.value as any)}>
+          <option value="all">All Categories</option>
+          <option value="Academic">Academic</option>
+          <option value="Cultural">Cultural</option>
+          <option value="Overall">Overall</option>
+        </select>
         <label style={{display:'flex',alignItems:'center',gap:6,fontSize:'0.85rem',color:'var(--color-text-muted)'}}>
           <input type="checkbox" checked={showLocked} onChange={e=>setShowLocked(e.target.checked)} /> Show locked
         </label>
       </div>
       {loading ? <div style={{padding:'1.2rem',color:'#8fa4ba'}}>Loading rewards...</div> : (
-      <div className="modern-rewards-grid">
+      <div className="rewards-grid">
         {filtered.map(r => {
           const unlocked = campusLevel >= r.level;
-          const status = claimDetails[r.id]?.status;
+          const status = claimDetails[r.id]?.status; // last status for this month (house)
           const isClaiming = claimingIds.includes(r.id);
-          const alreadyClaimed = claimedIds.includes(r.id);
+          const alreadyClaimed = claimedIds.includes(r.id); // pending or approved
           const liked = likedSet.has(r.id);
-          
           return (
-            <ModernRewardCard
-              key={r.id}
-              reward={r}
-              unlocked={unlocked}
-              status={status}
-              isClaiming={isClaiming}
-              alreadyClaimed={alreadyClaimed}
-              liked={liked}
-              likeLoading={likeLoading.includes(r.id)}
-              profile={profile}
-              onClaim={handleClaim}
-              onToggleLike={toggleLike}
-            />
+            <div className={`reward-card ${unlocked? 'unlocked':'locked'}`} key={r.id} aria-disabled={!unlocked}>
+              <RewardImage imageUrl={r.imageUrl} title={r.title} />
+              <div className="reward-info">
+                <h4>{r.title}</h4>
+                <p className="reward-desc">{r.description}</p>
+                <div className="reward-meta">
+                  Level {r.level} • {unlocked? <span className="status-unlocked">Unlocked</span>: <span className="status-locked">Locked</span>}
+                  <span style={{marginLeft:8,background:'#00e6d2',color:'#0b0d12',fontSize:'.7em',borderRadius:6,padding:'2px 7px',fontWeight:600,verticalAlign:'middle'}}>{r.campus}</span>
+                </div>
+                {r.externalLink && <a href={r.externalLink} target="_blank" rel="noopener noreferrer" className="claim-btn" style={{marginBottom:6,display:'inline-block',background:'#1ed760'}}>Go to Link</a>}
+                <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+                  <button className={`claim-btn ${status==='approved' ? 'claimed':''}`} disabled={!unlocked || (alreadyClaimed && status!=='rejected') || isClaiming} onClick={()=>handleClaim(r)}>
+                  {!unlocked ? 'Locked'
+                    : isClaiming ? 'Submitting...'
+                    : status === 'approved' ? `Claimed - ${profile?.house || ''} (${profile?.campus || ''})`
+                    : status === 'pending' ? 'Pending...' 
+                    : status === 'rejected' ? 'Claim Again'
+                    : 'Claim'}
+                  </button>
+                  <button aria-label={liked? 'Unlike reward':'Like reward'} onClick={()=>toggleLike(r)} disabled={likeLoading.includes(r.id)} style={{background:liked? '#ff2f72':'#2a3340',color:'#fff',border:'1px solid #394759',padding:'6px 10px',borderRadius:14,fontSize:12,fontWeight:600,display:'inline-flex',alignItems:'center',gap:6,cursor:'pointer',boxShadow: liked? '0 4px 16px -4px rgba(255,70,130,0.4)':'none'}}>
+                    <span style={{fontSize:14, lineHeight:1}}>{liked? '♥':'♡'}</span> {r.likes||0}
+                  </button>
+                </div>
+                {claimDetails[r.id] && (
+                  <div style={{marginTop:4,fontSize:10,color: status==='rejected'? '#ff8f9d':'#8fa4ba'}}>
+                    {status==='rejected' ? 'Last ' : ''}Claim on {(() => {
+                      const ts = claimDetails[r.id].decidedAt || claimDetails[r.id].createdAt;
+                      if(ts?.seconds){
+                        const d = new Date(ts.seconds*1000);
+                        return d.toLocaleDateString(undefined,{month:'short', day:'numeric'});
+                      }
+                      return new Date().toLocaleDateString(undefined,{month:'short', day:'numeric'});
+                    })()} {status && status !== 'approved' ? `(${status})` : ''}
+                  </div>
+                )}
+                {/* Aggregate claimed list removed per request */}
+              </div>
+              {r.likes && r.likes > 5 && (
+                <div style={{position:'absolute',top:6,left:6,background:'linear-gradient(135deg,#ff7b4f,#ff3d6a)',color:'#fff',padding:'2px 8px',borderRadius:12,fontSize:10,fontWeight:600,letterSpacing:.5}}>Popular</div>
+              )}
+            </div>
           );
         })}
       </div>

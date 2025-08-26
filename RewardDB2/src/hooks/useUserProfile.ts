@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -18,14 +18,6 @@ export const useUserProfile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Memoize profile to prevent unnecessary re-renders during form interactions
-  const memoizedProfile = useMemo(() => profile, [
-    profile?.uid,
-    profile?.displayName,
-    profile?.house,
-    profile?.campus
-  ]);
-
   useEffect(() => {
     if (!user) {
       setProfile(null);
@@ -44,5 +36,5 @@ export const useUserProfile = () => {
     return () => unsub();
   }, [user]);
 
-  return { user, profile: memoizedProfile, loading: loading || authLoading };
+  return { user, profile, loading: loading || authLoading };
 };
